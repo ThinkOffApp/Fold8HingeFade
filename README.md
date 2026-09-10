@@ -8,11 +8,11 @@ One capture, both screens, driven live by the hinge angle sensor.
 
 ## How it works
 
-1. A foreground service keeps a screen-capture session (MediaProjection) alive, mirroring the inner
-   screen at half resolution into an `ImageReader`. The latest frame is always at hand, so the
-   capture at fold time costs a buffer copy, not a round trip.
+1. The app is an accessibility service, because that is the one thing a normal app can be that
+   takes a screenshot without a consent dialog per session and keeps running across folds
+   (`AccessibilityService.takeScreenshot`, 20 to 60 ms measured on a Pixel Fold emulator).
 2. `TYPE_HINGE_ANGLE` reports the hinge in degrees. At the first degree below flat (168°) the
-   service grabs the latest frame once.
+   service takes one screenshot of the inner screen.
 3. An overlay window on the inner screen draws that frame through an AGSL `RuntimeShader`:
    the card scales to 62 %, rounds its corners and dims, over a black veil that thickens, all as a
    function of the angle between 168° and 40°.
@@ -24,10 +24,26 @@ One capture, both screens, driven live by the hinge angle sensor.
 ## Permissions
 
 - *Draw over other apps*: the overlay windows.
-- *Screen capture*: one consent tap after each start of the service (Android 14 rules).
-- A foreground-service notification with a Stop action while armed.
+- *Accessibility*: enable "Fold8 Hinge Fade" once under Settings > Accessibility. That is what
+  allows the screenshot; the service reads no screen content and handles no events.
 
 The app never stores or sends a capture; the frame lives in memory for one fold.
+
+## Verified so far
+
+On a Pixel Fold emulator (API 36, `adb emu fold` / hinge sensor sweep): capture at the first degree
+of fold in 17 to 60 ms, the inner-screen card crossfade following the angle, the cover panel detected
+as display 0 changing size, hand-off animation started, re-arm on unfold. Not yet seen on a real
+Galaxy Z Fold 8.
+
+## Known limit: the phone must not lock on fold
+
+App overlays draw beneath the lock screen. If folding the phone locks it (the default on most
+foldables, and what the emulator does), the cover shows the lock screen and the second half of the
+effect is invisible. On a Galaxy Z Fold, allow the app you are using under
+*Settings > Display > Continue apps on cover screen*, or turn off lock-on-fold, and the cover hand-off
+can show. Debug knob to slow the cover finish to 4 s for screenshots:
+`adb shell settings put global hingefade_slow 1`.
 
 ## Build
 
@@ -36,7 +52,7 @@ The app never stores or sends a capture; the frame lives in memory for one fold.
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Kotlin, AGP 9.3, minSdk 33 (AGSL). Tested target: Galaxy Z Fold 8.
+Kotlin, AGP 9.3, minSdk 33 (AGSL). Target: Galaxy Z Fold 8; exercised on the Pixel Fold emulator.
 
 ## Limits
 

@@ -12,9 +12,9 @@
     <Button android:id="@+id/btnOverlay" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="24dp" android:text="1. Allow drawing over other apps"/>
     <Button android:id="@+id/btnStart" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="2. Start (screen capture consent)"/>
+        android:layout_marginTop="8dp" android:text="2. Enable Fold8 Hinge Fade under Accessibility"/>
     <Button android:id="@+id/btnStop" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="8dp" android:text="Stop"/>
+        android:layout_marginTop="8dp" android:text="Turn off (same Accessibility page)"/>
     <Button android:id="@+id/btnPreview" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="8dp" android:text="Preview the fade here (no fold needed)"/>
 

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Fold8 Hinge Fade</string>
+    <string name="a11y_description">Takes one screenshot at the moment you start folding the phone and crossfades it onto the cover screen. The screenshot lives in memory for one fold and is never stored or sent.</string>
 </resources>
