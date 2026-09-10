@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="24dp" android:gravity="top">
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Fold8 Hinge Fade" android:textSize="26sp" android:textStyle="bold" android:textColor="#FF8DE6"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+        android:text="One capture at the first degree of fold, crossfaded down with the hinge angle on the inner screen, handed to the cover screen as it wakes."
+        android:textSize="15sp" android:textColor="#B0B0B8"/>
+
+    <Button android:id="@+id/btnOverlay" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="24dp" android:text="1. Allow drawing over other apps"/>
+    <Button android:id="@+id/btnStart" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:text="2. Start (screen capture consent)"/>
+    <Button android:id="@+id/btnStop" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:text="Stop"/>
+    <Button android:id="@+id/btnPreview" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:text="Preview the fade here (no fold needed)"/>
+
+    <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="24dp" android:textSize="15sp" android:fontFamily="monospace" android:textColor="#F2F2F5"
+        android:text="hinge: –"/>
+</LinearLayout>

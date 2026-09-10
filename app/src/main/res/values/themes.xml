@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.HingeFade" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0B0F</item>
+        <item name="android:textColorPrimary">#F2F2F5</item>
+        <item name="android:colorAccent">#FF8DE6</item>
+    </style>
+</resources>
