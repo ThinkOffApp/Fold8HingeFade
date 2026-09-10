@@ -20,7 +20,6 @@ import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import android.view.animation.DecelerateInterpolator
 
 /**
  * The whole effect lives in an accessibility service, because that is the one component a normal app
@@ -35,8 +34,11 @@ class HingeService : AccessibilityService() {
     companion object {
         private const val TAG = "HingeFade"
         const val FLAT_ANGLE = 168f      // below this the fold has begun
-        const val CLOSED_ANGLE = 40f     // the inner card is fully shrunk here
+        const val CLOSED_ANGLE = 40f     // the inner veil is at its darkest here
         const val REARM_ANGLE = 172f     // back above this = flat again
+        const val FOLD_TIMEOUT_MS = 2500L   // hinge still for this long with no cover seen: give up, hide
+        const val COVER_HOLD_MS = 120L      // frame fully visible on the cover before the dissolve
+        const val COVER_FADE_MS = 420L      // the dissolve into the live cover UI
 
         @Volatile var running = false
         @Volatile var status: (String) -> Unit = {}
@@ -89,16 +91,17 @@ class HingeService : AccessibilityService() {
     }
 
     private fun onAngle(a: Float) {
-        lastAngle = a
         when (state) {
             State.WAIT_FLAT -> if (a >= REARM_ANGLE) { state = State.FLAT; hideAll() }
             State.FLAT -> if (a < FLAT_ANGLE) beginFold(a)
             State.FOLDING -> {
-                overlay?.progress = progressFor(a)
+                overlay?.veil = 0.35f * progressFor(a)
+                if (kotlin.math.abs(a - lastAngle) > 0.5f) { main.removeCallbacks(foldTimeout); main.postDelayed(foldTimeout, FOLD_TIMEOUT_MS) }
                 if (a >= REARM_ANGLE) reset("unfolded again")
             }
             State.HANDED_OFF -> if (a >= REARM_ANGLE) reset("flat again, re-armed")
         }
+        lastAngle = a
         report("hinge %.0f°  %s".format(a, state.name.lowercase()))
     }
 
@@ -119,7 +122,8 @@ class HingeService : AccessibilityService() {
                 captureMs = SystemClock.elapsedRealtime() - t0
                 frame?.recycle(); frame = b
                 if (state != State.FOLDING) return          // unfolded again while the shot was taken
-                showInnerOverlay(b, progressFor(lastAngle))
+                showInnerOverlay(b, 0.35f * progressFor(lastAngle))
+                main.removeCallbacks(foldTimeout); main.postDelayed(foldTimeout, FOLD_TIMEOUT_MS)
                 Log.i(TAG, "fold began at %.1f°, frame ${b.width}x${b.height} in $captureMs ms".format(a))
                 checkCover()                                 // the cover may already be lit on a fast fold
             }
@@ -132,17 +136,18 @@ class HingeService : AccessibilityService() {
     }
 
     private var lastAngle = 180f
+    private val foldTimeout = Runnable { if (state == State.FOLDING) { Log.i(TAG, "no cover within ${FOLD_TIMEOUT_MS} ms, hiding"); hideAll(); state = State.HANDED_OFF } }
     private fun reset(why: String) { hideAll(); state = State.FLAT; Log.i(TAG, "reset: $why") }
 
     // ---- inner overlay ----
-    private fun showInnerOverlay(b: Bitmap, p: Float) {
-        overlay?.let { it.setFrame(b); it.progress = p; return }
+    private fun showInnerOverlay(b: Bitmap, v: Float) {
+        overlay?.let { it.setFrame(b); it.veil = v; return }
         val ctx = createDisplayContext(displays.getDisplay(Display.DEFAULT_DISPLAY))
             .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
         val wm = ctx.getSystemService(WindowManager::class.java)
-        val v = HingeFadeView(ctx).apply { setFrame(b); progress = p }
-        try { wm.addView(v, overlayParams()) } catch (e: Exception) { Log.w(TAG, "overlay refused: $e"); return }
-        overlay = v; overlayWm = wm
+        val view = HingeFadeView(ctx).apply { setFrame(b); veil = v; opacity = 0f }
+        try { wm.addView(view, overlayParams()) } catch (e: Exception) { Log.w(TAG, "overlay refused: $e"); return }
+        overlay = view; overlayWm = wm
     }
 
     private fun overlayParams() = WindowManager.LayoutParams(
@@ -158,6 +163,7 @@ class HingeService : AccessibilityService() {
     }
 
     private fun hideAll() {
+        main.removeCallbacks(foldTimeout)
         coverAnim?.cancel(); coverAnim = null
         overlay?.let { v -> try { overlayWm?.removeViewImmediate(v) } catch (_: Exception) {} }
         overlay = null; overlayWm = null
@@ -182,8 +188,8 @@ class HingeService : AccessibilityService() {
         Log.i(TAG, "cover display ${cover.displayId} (${cover.mode.physicalWidth}x${cover.mode.physicalHeight}) is on, handing off")
         if (cover.displayId == Display.DEFAULT_DISPLAY) {
             // display 0 itself became the cover panel: the overlay window follows it, just re-run the finish
-            val v = overlay ?: run { showInnerOverlay(b, 0.55f); overlay } ?: return
-            runCoverFinish(v)
+            val v = overlay ?: run { showInnerOverlay(b, 0f); overlay } ?: return
+            runCoverFinish(v, cover)
         } else {
             hideAll()
             val pres = Presentation(createDisplayContext(cover), cover).apply {
@@ -195,27 +201,31 @@ class HingeService : AccessibilityService() {
             pres.setContentView(v)
             try { pres.show() } catch (e: Exception) { Log.w(TAG, "presentation refused: $e"); return }
             presentation = pres
-            runCoverFinish(v)
+            runCoverFinish(v, cover)
         }
     }
 
-    /** The card lands on the cover: grows from the folded size to fill it, then fades out over the live UI. */
-    private fun runCoverFinish(v: HingeFadeView) {
-        v.progress = 0.55f; v.opacity = 1f
-        coverAnim = ValueAnimator.ofFloat(0f, 1f).apply {
-            // debug knob: adb shell settings put global hingefade_slow 1 -> 4 s finish, to screenshot it
-            duration = if (android.provider.Settings.Global.getInt(contentResolver, "hingefade_slow", 0) == 1) 4000L else 650L
-            interpolator = DecelerateInterpolator()
-            addUpdateListener { a ->
-                val t = a.animatedValue as Float
-                v.progress = 0.55f * (1f - (t / 0.5f).coerceIn(0f, 1f))
-                v.opacity = 1f - ((t - 0.45f) / 0.55f).coerceIn(0f, 1f)
-            }
+    /** The frame appears on the cover at the size it had, holds a beat, then dissolves into the live UI. */
+    private fun runCoverFinish(v: HingeFadeView, cover: Display) {
+        val innerDpi = displays.displays.maxByOrNull { it.mode.physicalWidth.toLong() * it.mode.physicalHeight }
+            ?.let { android.util.DisplayMetrics().also { m -> @Suppress("DEPRECATION") it.getRealMetrics(m) }.densityDpi } ?: 0
+        val coverDpi = android.util.DisplayMetrics().also { m -> @Suppress("DEPRECATION") cover.getRealMetrics(m) }.densityDpi
+        v.scale = if (innerDpi > 0 && coverDpi > 0) innerDpi.toFloat() / coverDpi else 1f
+        v.veil = 0f; v.opacity = 1f
+        val slow = android.provider.Settings.Global.getInt(contentResolver, "hingefade_slow", 0) == 1   // debug: adb shell settings put global hingefade_slow 1
+        val fade = if (slow) 4000L else COVER_FADE_MS
+        coverAnim = ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = fade
+            startDelay = COVER_HOLD_MS
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addUpdateListener { a -> v.opacity = a.animatedValue as Float }
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) { hideAll() }
+                override fun onAnimationCancel(animation: Animator) { hideAll() }
             })
             start()
         }
+        main.postDelayed({ if (state == State.HANDED_OFF && (overlay != null || presentation != null)) { Log.i(TAG, "safety hide"); hideAll() } }, COVER_HOLD_MS + fade + 500)
         report("handed off to the cover (capture $captureMs ms)")
     }
 

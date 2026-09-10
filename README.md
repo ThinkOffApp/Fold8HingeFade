@@ -13,13 +13,14 @@ One capture, both screens, driven live by the hinge angle sensor.
    (`AccessibilityService.takeScreenshot`, 20 to 60 ms measured on a Pixel Fold emulator).
 2. `TYPE_HINGE_ANGLE` reports the hinge in degrees. At the first degree below flat (168°) the
    service takes one screenshot of the inner screen.
-3. An overlay window on the inner screen draws that frame through an AGSL `RuntimeShader`:
-   the card scales to 62 %, rounds its corners and dims, over a black veil that thickens, all as a
-   function of the angle between 168° and 40°.
+3. On the inner screen nothing shrinks: an overlay only darkens the live screen a little (up to
+   35 %) as the hinge closes between 168° and 40°.
 4. When a lit display much smaller than the inner one appears (the cover panel waking, either as a
-   new `Display` or as display 0 changing size, both are handled) the same frame is shown there,
-   grows to fill the cover and fades out in 650 ms, revealing the live cover UI underneath.
-5. Unfolding back past 172° re-arms it.
+   new `Display` or as display 0 changing size, both are handled) the frame is shown on it at the
+   size it had, centre-cropped 1:1 by pixel density, holds 120 ms, then dissolves over 420 ms into
+   the live cover UI underneath (AGSL `RuntimeShader`, one draw call).
+5. Unfolding back past 172° re-arms it. If the hinge stops moving for 2.5 s without a cover
+   appearing, or the dissolve somehow does not end, the overlay is removed anyway.
 
 ## Permissions
 

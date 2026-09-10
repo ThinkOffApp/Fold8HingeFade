@@ -60,13 +60,15 @@ class MainActivity : ComponentActivity() {
     private fun preview() {
         val shot = b.root.drawToBitmap()
         val root = window.decorView as ViewGroup
-        val v = HingeFadeView(this).apply { setFrame(shot) }
+        val v = HingeFadeView(this).apply { setFrame(shot); opacity = 1f; scale = 1f }
         root.addView(v, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        ValueAnimator.ofFloat(0f, 1f, 1f, 0f).apply {
-            duration = 2600
-            addUpdateListener { a -> v.progress = a.animatedValue as Float }
+        b.status.text = "preview: the frozen frame dissolves into the live screen"
+        ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = 1400; startDelay = 600
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            addUpdateListener { a -> v.opacity = a.animatedValue as Float }
             addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) { root.removeView(v); shot.recycle() }
+                override fun onAnimationEnd(animation: Animator) { root.removeView(v); shot.recycle(); render() }
             })
             start()
         }

@@ -10,8 +10,10 @@ import android.graphics.Shader
 import android.view.View
 
 /**
- * Draws one captured frame as a card that shrinks, rounds and dims as [progress] goes 0 -> 1,
- * over a black veil that thickens with it. Pure AGSL, one draw call, driven from the hinge angle.
+ * Draws one captured frame at the same size it had on screen. Two uses:
+ *  - inner screen while folding: the frame is invisible, only a veil darkens with [veil] (0..1);
+ *  - cover screen: the frame is centre-cropped at 1:1 physical size ([scale] = cover dpi / inner dpi)
+ *    and dissolved away with [opacity] going 1 -> 0, so the live cover UI shows through.
  */
 class HingeFadeView(context: Context) : View(context) {
 
@@ -19,13 +21,17 @@ class HingeFadeView(context: Context) : View(context) {
     private val paint = Paint()
     private var bitmap: Bitmap? = null
 
-    /** 0 = flat (invisible), 1 = fully folded card. */
-    var progress = 0f
+    /** Black veil strength over the live screen, 0..1. */
+    var veil = 0f
         set(v) { field = v.coerceIn(0f, 1f); invalidate() }
 
-    /** Whole-view opacity, for the hand-off fade on the cover screen. */
-    var opacity = 1f
+    /** Opacity of the frame itself, 0..1. */
+    var opacity = 0f
         set(v) { field = v.coerceIn(0f, 1f); invalidate() }
+
+    /** Frame pixels per view pixel, 1.0 = same physical size when both panels share a density. */
+    var scale = 1f
+        set(v) { field = v; invalidate() }
 
     fun setFrame(b: Bitmap?) {
         bitmap = b
@@ -40,8 +46,9 @@ class HingeFadeView(context: Context) : View(context) {
         val b = bitmap ?: return
         if (b.isRecycled) return
         shader.setFloatUniform("res", width.toFloat(), height.toFloat())
-        shader.setFloatUniform("p", progress)
-        shader.setFloatUniform("alpha", opacity)
+        shader.setFloatUniform("veil", veil)
+        shader.setFloatUniform("opacity", opacity)
+        shader.setFloatUniform("scale", scale)
         paint.shader = shader
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
     }
@@ -51,28 +58,19 @@ class HingeFadeView(context: Context) : View(context) {
             uniform shader img;
             uniform float2 res;
             uniform float2 imgRes;
-            uniform float p;
-            uniform float alpha;
-
-            float rrect(float2 pt, float2 halfSize, float r) {
-                float2 d = abs(pt) - halfSize + r;
-                return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
-            }
+            uniform float veil;
+            uniform float opacity;
+            uniform float scale;
 
             half4 main(float2 xy) {
-                float e = p * p * (3.0 - 2.0 * p);
-                float s = mix(1.0, 0.62, e);
-                float2 c = res * 0.5;
-                float2 rel = xy - c;
-                float r = mix(0.0, 56.0, e);
-                float d = rrect(rel, c * s, r);
-                float2 uv = (rel / s + c) / res * imgRes;
+                // centre-crop: the frame keeps its size, the view shows the middle of it
+                float2 uv = (xy - res * 0.5) * scale + imgRes * 0.5;
+                float2 inside = step(float2(0.0), uv) * step(uv, imgRes);
+                float vis = inside.x * inside.y * opacity;
                 half4 col = img.eval(uv);
-                col.rgb *= half(mix(1.0, 0.7, e));
-                float inside = 1.0 - smoothstep(-1.0, 1.0, d);
-                half4 bg = half4(0.0, 0.0, 0.0, half(e * 0.9));
-                half4 outc = mix(bg, half4(col.rgb, 1.0), half(inside));
-                return outc * half(alpha);
+                half4 frame = half4(col.rgb, 1.0) * half(vis);        // premultiplied
+                half4 dark = half4(0.0, 0.0, 0.0, half(veil * (1.0 - vis)));
+                return frame + dark;
             }
         """
     }
