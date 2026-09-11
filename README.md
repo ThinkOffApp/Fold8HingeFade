@@ -37,6 +37,12 @@ of fold in 17 to 60 ms, the inner-screen card crossfade following the angle, the
 as display 0 changing size, hand-off animation started, re-arm on unfold. Not yet seen on a real
 Galaxy Z Fold 8.
 
+## Known limit: banking apps
+
+Banking apps refuse to run while any third-party accessibility service is enabled, and the
+screenshot path needs exactly that. Turn the service off under Settings > Accessibility before
+using the bank; there is no version of this approach that keeps both.
+
 ## Known limit: the phone must not lock on fold
 
 App overlays draw beneath the lock screen. If folding the phone locks it (the default on most
