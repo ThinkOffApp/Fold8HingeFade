@@ -51,9 +51,21 @@ class MainActivity : ComponentActivity() {
         override fun onSensorChanged(e: SensorEvent) { lastAngle = e.values[0]; render() }
     }
 
+    /** True when the system lists our accessibility service as enabled (survives process restarts, unlike the static flag). */
+    private fun serviceEnabled(): Boolean {
+        val am = getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+        return am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { it.resolveInfo.serviceInfo.packageName == packageName }
+    }
+
     private fun render() {
         val angle = if (lastAngle.isNaN()) "no hinge sensor" else "%.1f°".format(lastAngle)
-        b.status.text = "hinge: $angle\noverlay permission: ${if (Settings.canDrawOverlays(this)) "granted" else "missing"}\nservice: ${if (HingeService.running) serviceStatus else "off (enable it under Accessibility)"}"
+        val svc = when {
+            HingeService.running -> serviceStatus
+            serviceEnabled() -> "enabled, connecting"
+            else -> "off: enable it under Accessibility (One UI turns it off after every app update)"
+        }
+        b.status.text = "hinge: $angle\noverlay permission: ${if (Settings.canDrawOverlays(this)) "granted" else "missing"}\nservice: $svc"
     }
 
     /** Runs the same shader on a capture of this screen, so the look can be judged without folding. */
